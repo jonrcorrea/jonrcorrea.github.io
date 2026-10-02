@@ -1,0 +1,45 @@
+name: Publica Rede de Anterioridade MPTSD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publica-rede-anterioridade-mptsd.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copiar blocos do staging e tornar o projeto autocontido
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="rede-anterioridade-mptsd"
+          mkdir -p "$dir"
+          for i in $(seq -w 0 12); do
+            curl -fsSL "https://teto-cmed-hupe.vercel.app/mapa-mptsd/part-${i}.txt" -o "$dir/part-${i}.txt"
+          done
+          cat > "$dir/index.html" <<'HTML'
+          <!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rede de Anterioridade MPTSD</title><style>html,body{height:100%;margin:0;background:#0b1020;color:#e6e9f2;font:14px system-ui,sans-serif}.wrap{height:100%;display:grid;place-items:center}.msg{opacity:.8}</style></head><body><div class="wrap"><div class="msg">Carregando mapa…</div></div><script>(async()=>{try{const names=Array.from({length:13},(_,i)=>`part-${String(i).padStart(2,'0')}.txt`);const texts=await Promise.all(names.map(n=>fetch('./'+n,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error(`${n}: ${r.status}`);return r.text()})));const b64=texts.join('').replace(/\s+/g,'');const raw=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));const ds=new DecompressionStream('gzip');const html=await new Response(new Blob([raw]).stream().pipeThrough(ds)).text();document.open();document.write(html);document.close()}catch(e){console.error(e);document.body.innerHTML='<div class="wrap"><div class="msg">Falha ao carregar o mapa: '+String(e.message||e)+'</div></div>'}})();</script></body></html>
+          HTML
+
+      - name: Commit dos arquivos autocontidos
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add rede-anterioridade-mptsd/
+          if git diff --cached --quiet; then
+            echo "Sem alterações."
+          else
+            git commit -m "Torna Rede de Anterioridade MPTSD autocontida"
+            git push
+          fi
